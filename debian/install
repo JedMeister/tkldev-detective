@@ -1,2 +1,3 @@
 bin/*	        usr/bin/
 tkldet_modules  usr/share/tkldev-detective/
+contrib/*       usr/bin/
