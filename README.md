@@ -26,48 +26,58 @@ Optional Dependencies:
 
 - `python3-yaml`    - enables yaml lint (debian package)
 
-Installation
-------------
+Installation - via apt
+----------------------
 
-**Using apt** - best for direct usage
+Recommended for direct usage.
 
-1. Install `tkldev-detective` from TurnKey apt repo (will also install
-apt-file)
+Install `tkldev-detective` from TurnKey apt repo - will install all
+dependencies except for `ruff`
 ```
 apt update
-apt install --yes tkldev-detective
+apt install --yes tkldev-detective python3-yaml
 ```
 
-2. Install dependencies (installs `ruff` globally using `pipx`)
+Install `ruff` - option 1 - using `tkldevdet_install_ruff.sh` script
 ```
-apt install --yes shellcheck mypy pipx python3-yaml
+# to install default version hardcoded into script
+tkldevdet_install_ruff.sh
+
+# alternatively, install or update to specific version - e.g. 0.14.0
+VERSION=0.14.0 tkldevdet_install_ruff.sh --force
+```
+
+Install `ruff` - option 2 - using `pipx`
+```
+apt install --yes pipx
 mkdir -p /usr/local/{bin,src}
 PIPX_HOME=/usr/local/src PIPX_BIN_DIR=/usr/local/bin pipx install ruff
 ```
 
----
+Installation - from source
+--------------------------
 
-**From source** - best for development of `tkldev-detective` itself
+Recommended when developing `tkldev-detective` itself.
 
-1. Clone this repo somewhere, `/turnkey/public` is recommended:
+Clone this repo somewhere, `/turnkey/public` is recommended
 ```bash
 mkdir -p /turnkey/public
 cd /turnkey/public
 git clone git@github.com:turnkeylinux/tkldev-detective
 ```
 
-2. Add ``tkldev-detective`` to your path:
+Add ``tkldev-detective`` to your path:
 ```bash
 ln -s /turnkey/public/tkldev-detective/tkldev-detective /usr/local/bin/tkldev-detective
 ```
 
-3. Install dependencies (installs `ruff` globally using `pipx`)
+Install dependencies - excluding `ruff`
 ```
 apt update
-apt install --yes apt-file shellcheck mypy pipx python3-yaml
-mkdir -p /usr/local/{bin,src}
-PIPX_HOME=/usr/local/src PIPX_BIN_DIR=/usr/local/bin pipx install ruff
+apt install --yes apt-file shellcheck pylint mypy python3-yaml
 ```
+Finally, install `ruff` using one of the options noted in the 'Installation -
+via apt' section above.
 
 Usage
 -----
