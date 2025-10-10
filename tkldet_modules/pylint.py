@@ -57,10 +57,10 @@ if is_installed("pylint") and not is_in_path("ruff"):
             ):
                 if report["obj"]:
                     location_metadata = (
-                        f'{report["obj"]} in module {report["module"]}'
+                        f"{report['obj']} in module {report['module']}"
                     )
                 else:
-                    location_metadata = f'in base of module {report["module"]}'
+                    location_metadata = f"in base of module {report['module']}"
 
                 yield FileReport(
                     item=item,
