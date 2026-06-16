@@ -6,7 +6,7 @@ import json
 from argparse import ArgumentParser
 
 def fatal(msg):
-    print(f'Fatal: {msg}', file=sys.stderr)
+    print(f"Fatal: {msg}", file=sys.stderr)
     sys.exit(1)
 
 try:
@@ -15,31 +15,45 @@ except ImportError:
     fatal("tkldev-detective not installed (required for makefile parser)")
     
 
-if __name__ == '__main__':
-    parser = ArgumentParser(description='''
+if __name__ == "__main__":
+    parser = ArgumentParser(description="""
 Tool for getting variables and includes from makefiles.
 
 Mostly specialized for turnkey usage (cuts corners that might cause issues in
 broader applications)
-''')
-    parser.add_argument('makefile', metavar='path/to/Makefile')
+""",
+    )
+    parser.add_argument("makefile", metavar="path/to/Makefile")
 
     selection_group = parser.add_mutually_exclusive_group()
-    selection_group.add_argument('-a', '--all',
-        help='(default) show everything', action='store_true')
-    selection_group.add_argument('-v', '--var', nargs='?',
-        metavar='VARNAME', const=True,
-        help='show all variables or specific variable if specified')
-    selection_group.add_argument('-i', '--included',
-        help='show all included', action='store_true')
+    selection_group.add_argument(
+        "-a", "--all", action="store_true", help="(default) show everything",
+    )
+    selection_group.add_argument(
+        "-v",
+        "--var",
+        nargs="?",
+        metavar="VARNAME",
+        const=True,
+        help="show all variables or specific variable if specified",
+    )
+    selection_group.add_argument(
+        "-i", "--included", action="store_true", help="show all included",
+    )
 
     format_group = parser.add_mutually_exclusive_group()
 
-    format_group.add_argument('-s', '--shell', help='output in a shell friendly way')
-    format_group.add_argument('-j', '--json', help='output json')
+    format_group.add_argument(
+        "-s", "--shell", help="output in a shell friendly way",
+    )
+    format_group.add_argument("-j", "--json", help="output json")
 
-    parser.add_argument('-d', '--shell-delim', default=':',
-        help='delimiter to use with shell output')
+    parser.add_argument(
+        "-d",
+        "--shell-delim",
+        default=":",
+        help="delimiter to use with shell output",
+    )
 
     args = parser.parse_args()
 
@@ -63,25 +77,30 @@ broader applications)
                 out.append(':'.join([*prefix, v]))
             else:
                 raise TypeError(
-                    "don't know how to format {type(v)} in a shell friendly way")
+                    "don't know how to format {type(v)} in a shell friendly"
+                    " way",
+                )
             if no_prefix:
                 return '\n'.join(out)
             else:
                 return out
     try:
         data = mkparser.parse_makefile(abspath(args.makefile)).to_dict()
-    except FileNotFoundError as e:
-        fatal("Makefile not found - please ensure that you are in app build code base dir")
+    except FileNotFoundError:
+        fatal(
+            "Makefile not found - please ensure that you are in app build code"
+            " base dir",
+        )
 
     if args.var:
         if isinstance(args.var, str):
-            if args.var in data['variables']:
-                print(dump(data['variables'][args.var]))
+            if args.var in data["variables"]:
+                print(dump(data["variables"][args.var]))
             else:
                 print("variable not found", file=sys.stderr)
         else:
-            print(dump(data['variables']))
+            print(dump(data["variables"]))
     elif args.included:
-        print(dump(data['included']))
+        print(dump(data["included"]))
     else:
         print(dump(data))
