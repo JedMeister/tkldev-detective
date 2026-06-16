@@ -24,6 +24,10 @@ usage() {
     fi
 cat<<EOF
 Syntax: $(basename "$0") [appliance-name]
+
+A tool to edit/update an appliance changelog.
+
+
 When run in the root directory of an appliance's source code, this script will
 create a new changelog entry at the top of an existing changelog file & opens
 the file for editing in vim.
@@ -36,7 +40,9 @@ Prerequisites:
 
 Arguments::
 
-    appliance-name      - e.g., core
+    appliance-name      - e.g., core ('\$FAB_PATH/products/core')
+                          Optional - will default to current directory if not
+                          set.
     -a|--author         - Update the author name and email address of the most
                           recent entry (do not leave open for editing).
     -d|--date           - Update the date of the most recent entry (do not
@@ -57,8 +63,9 @@ Environment::
     DEBEMAIL            - email address of operator e.g. "joe@blogs.com"
     EMAIL               - email address of operator (if DEBEMAIL not set)
     EXTRA_TEXT          - additional changelog points to include in new entry
-                          if not set; then by default it will read from 
-                          "/turnkey/fab/common/changes"
+                          if not set; then by default it will read from
+                          '\$FAB_PATH/common/changes'
+    FAB_PATH            - if not set, will fallback to '/turnkey/fab/'
     DEVDEBUG            - turn on debugging
 
 Future plans:
@@ -76,18 +83,9 @@ EOF
 [[ -z "$DEVDEBUG" ]] || set -x
 which dch > /dev/null || fatal "dch not found; please install 'devscripts'"
 which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
-[[ -f changelog ]] || fatal "no changelog in local dir"
 
-APP=$(basename "$PWD")
-APP_CHANGELOGS=$(tkldev-makefile-info "$PWD/Makefile" -i \
-    | grep -E "^${FAB_PATH}/common/" \
-    | sed -En "s|^([a-z0-9/-]+)/mk/turnkey/*([a-z0-9-]+).mk|\1/changes/\2.changelog|p")
-
-if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
-    EXTRA_TEXT=$( \
-        tkldev-changelog-extractor "$PWD/changelog" \
-        "${FAB_PATH}/common/changes/turnkey.changelog" "$APP_CHANGELOGS" \
-    )
+if [[ -z "$FAB_PATH" ]]; then
+    FAB_PATH=/turnkey/fab
 fi
 
 EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
@@ -133,7 +131,7 @@ EOF
     fi
 fi
 
-unset set_author set_date new_min_set new_maj_set new edit
+unset set_author set_date new_min_set new_maj_set new edit app_name
 if [[ $# -eq 0 ]]; then
     # if no args; then default to '-n|--new-minor'
     new_min_set=1
@@ -147,28 +145,70 @@ while [[ $# -gt 0 ]]; do
         -a|--author)
             set_author=y
             edit=n
-            shift;;
+            ;;
         -d|--date)
             set_date=y
             edit=n
-            shift;;
+            ;;
         -e|--edit)
             set_author=y
             set_date=y
             edit=y
-            shift;;
+            ;;
         -n|--new-minor)
             new_min_set=1
             new=minor
             edit=y
-            shift;;
+            ;;
         -N|--new-major)
             new_maj_set=1
             new=major
             edit=y
-            shift;;
+            ;;
+        -*)
+            fatal "Unknown argument $1"
+            ;;
+        *)
+            if [[ -z "$app_name" ]]; then
+                app_name=$1
+            else
+                fatal "Only one app name can be given - got: $app_name & '$1'"
+            fi
+            ;;
     esac
+    shift
 done
+
+if [[ -z "$app_name" ]] && [[ -f "$PWD/changelog" ]]; then
+    app_path="$PWD"
+    app_name=$(basename "$PWD")
+elif [[ -f "$FAB_PATH/$app_name/changelog" ]]; then
+    app_path="$FAB_PATH/$app_name"
+    changelog="$FAB_PATH/$app_name/changelog"
+else
+    fatal "Could not find changelog for $app_name"
+fi
+
+if [[ -f "$app_path/Makefile" ]]; then
+    makefile="$app_path/Makefile"
+else
+    fatal "Could not find make file: $app_path/Makefile"
+fi
+
+changelog="$app_path/changelog"
+
+common_changelogs=$(tkldev-makefile-info "$makefile" -c \
+    | grep -E "^${FAB_PATH}/common/" \
+    | sed -En "s|^([a-z0-9/-]+)/mk/turnkey/*([a-z0-9-]+).mk|\1/changes/\2.changelog|p")
+
+if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
+    EXTRA_TEXT=$( \
+        tkldev-changelog-extractor "$PWD/changelog" \
+        "${FAB_PATH}/common/changes/turnkey.changelog" "$APP_CHANGELOGS" \
+    )
+fi
+
+
 
 OLD_VER=$(head -1 changelog | cut -d" " -f1 | sed "s|^.*${APP}-||")
 MAJ="$(echo "${OLD_VER}" | cut -d. -f1)"
