@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
+"""\
+Tool for getting variables and includes from makefiles.
 
-from os.path import abspath
-import sys
+Mostly specialized for turnkey usage (cuts corners that might cause issues in
+broader applications)
+"""
+
 import json
-from argparse import ArgumentParser
+import sys
+from argparse import ArgumentParser, RawTextHelpFormatter
+from os.path import abspath
+
 
 def fatal(msg):
     print(f"Fatal: {msg}", file=sys.stderr)
     sys.exit(1)
+
 
 try:
     from libtkldet import mkparser
@@ -15,13 +23,9 @@ except ImportError:
     fatal("tkldev-detective not installed (required for makefile parser)")
     
 
-if __name__ == "__main__":
-    parser = ArgumentParser(description="""
-Tool for getting variables and includes from makefiles.
-
-Mostly specialized for turnkey usage (cuts corners that might cause issues in
-broader applications)
-""",
+def main() -> None:
+    parser = ArgumentParser(
+        description=__doc__, formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument("makefile", metavar="path/to/Makefile")
 
@@ -104,3 +108,7 @@ broader applications)
         print(dump(data["included"]))
     else:
         print(dump(data))
+
+
+if __name__ == "__main__":
+    main()
