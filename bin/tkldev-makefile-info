@@ -44,6 +44,12 @@ def main() -> None:
     selection_group.add_argument(
         "-i", "--included", action="store_true", help="show all included",
     )
+    selection_group.add_argument(
+        "-c",
+        "--common-makefiles",
+        action="store_true",
+        help="show included common makefiles only",
+    )
 
     format_group = parser.add_mutually_exclusive_group()
 
@@ -106,6 +112,17 @@ def main() -> None:
             print(dump(data["variables"]))
     elif args.included:
         print(dump(data["included"]))
+    elif args.common_makefiles:
+        common_makefiles = []
+        for makefile in data["included"]:
+            if (
+                    makefile.startswith("/tmp")
+                    or makefile.endswith("/Makefile")
+                    or makefile.endswith("/product.mk")
+            ):
+                continue
+            common_makefiles.append(makefile)
+        print(dump(common_makefiles))
     else:
         print(dump(data))
 
