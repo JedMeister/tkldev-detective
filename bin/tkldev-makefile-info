@@ -74,7 +74,7 @@ broader applications)
                 for v in v:
                     out.extend(dump(v, prefix))
             elif isinstance(v, str):
-                out.append(':'.join([*prefix, v]))
+                out.append(args.shell_delim.join([*prefix, v]))
             else:
                 raise TypeError(
                     "don't know how to format {type(v)} in a shell friendly"
