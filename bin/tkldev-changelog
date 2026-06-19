@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# Copyright (c) 2017 TurnKey GNU/Linux - http://www.turnkeylinux.org
+# Copyright (c) 2017-2026 TurnKey GNU/Linux - https://www.turnkeylinux.org
 # 
 # tkldev-changelog
 # ----------------
@@ -27,10 +27,14 @@ Syntax: $(basename "$0") [appliance-name]
 
 A tool to edit/update an appliance changelog.
 
-
 When run in the root directory of an appliance's source code, this script will
 create a new changelog entry at the top of an existing changelog file & opens
 the file for editing in vim.
+
+This tool will also check the Makefile for included common makefiles and if
+any of those have an appropriately versioned common changelog entry (see
+common/changes/) those entries will also be automatically included in the new
+changelog entry.
 
 Prerequisites:
 
@@ -179,7 +183,9 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-if [[ -z "$app_name" ]] && [[ -f "$PWD/changelog" ]]; then
+if [[ -z "$app_name" ]]; then
+    changelog="$PWD/changelog"
+    [[ -f "$changelog" ]] || fatal "Could not find changelog in local dir."
     app_path="$PWD"
     app_name=$(basename "$PWD")
 elif [[ -f "$FAB_PATH/$app_name/changelog" ]]; then
@@ -195,20 +201,19 @@ else
     fatal "Could not find make file: $app_path/Makefile"
 fi
 
-changelog="$app_path/changelog"
+_changes="$FAB_PATH/common/changes"
+readarray -t common_changes <<< "$(tkldev-makefile-info "$makefile" -c \
+    | sed -En "\|/common/|s|.*/turnkey/([a-z]+)\.mk|$_changes/\1.changelog|p" \
+    | sort \
+)"
 
-common_changelogs=$(tkldev-makefile-info "$makefile" -c \
-    | grep -E "^${FAB_PATH}/common/" \
-    | sed -En "s|^([a-z0-9/-]+)/mk/turnkey/*([a-z0-9-]+).mk|\1/changes/\2.changelog|p")
-
-if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
+if [[ -z "$EXTRA_TEXT" ]]; then
     EXTRA_TEXT=$( \
-        tkldev-changelog-extractor "$PWD/changelog" \
-        "${FAB_PATH}/common/changes/turnkey.changelog" "$APP_CHANGELOGS" \
+        tkldev-changelog-extractor "$app_path/changelog" \
+        "${FAB_PATH}/common/changes/turnkey.changelog" \
+        "${common_changes[@]}" \
     )
 fi
-
-
 
 OLD_VER=$(head -1 changelog | cut -d" " -f1 | sed "s|^.*${APP}-||")
 MAJ="$(echo "${OLD_VER}" | cut -d. -f1)"
