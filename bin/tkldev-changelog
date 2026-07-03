@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# Copyright (c) 2017-2026 TurnKey GNU/Linux - https://www.turnkeylinux.org
+# Copyright (c) 2017 TurnKey GNU/Linux - http://www.turnkeylinux.org
 # 
 # tkldev-changelog
 # ----------------
@@ -23,18 +23,13 @@ usage() {
         exit_code=1
     fi
 cat<<EOF
-Syntax: $(basename "$0") [appliance-name]
+Syntax: $(basename "$0") [APP_NAME_OR_PATH]
 
-A tool to edit/update an appliance changelog.
+Create a new changelog entry.
 
-When run in the root directory of an appliance's source code, this script will
-create a new changelog entry at the top of an existing changelog file & opens
-the file for editing in vim.
+This script helps create a new TurnKey appliance changelog entry.
 
-This tool with also check the Makefile for included common makefiles and if
-any of those have an appropriately versioned common changelog entry (see
-common/changes/) those entries will also be automatically included in the new
-changelog entry.
+It will search for a a 'Makefile' in the same dir as the changelog
 
 Prerequisites:
 
@@ -42,41 +37,41 @@ Prerequisites:
     vim (debian package - optional; vim-tiny is pre-installed and will work)
     configured local tz-data (optional - otherwise will fall back to UTC)
 
-Arguments::
+Arguments:
 
-    appliance-name      - e.g., core ('\$FAB_PATH/products/core')
-                          Optional - will default to current directory if not
-                          set.
+    APP_NAME_OR_PATH    - One of:
+                          - appliance name (assumes \$FAB_PATH/products/APP_NAME)
+                          - path to appliance directory (containing changelog)
+                          - None - assumes 'changelog' in local directory
+
     -a|--author         - Update the author name and email address of the most
                           recent entry (do not leave open for editing).
     -d|--date           - Update the date of the most recent entry (do not
                           leave open for editing).
+
     -e|--edit           - Edit the most recent entry (rather than generating a
                           new one) - implies -d|--date & -n|--name, but leaves
                           open for editing.
-    -n|--new-minor      - Create new minor version changelog entry (e.g. 16.1).
+    -n|--new-minor      - Create new minor version changelog entry (e.g. 18.1).
                           Leaves open for editing. (Default action if no switch
                           specified).
-    -N|--new-major      - Create new major version changelog entry (e.g. 17.0).
+    -N|--new-major      - Create new major version changelog entry (e.g. 19.0).
                           Leaves open for editing.
 
 Environment::
 
     DEBFULLNAME         - full name of operator e.g. "Joe Bloggs"
-    FULLNAME            - full name of operator (if DEBFULLNAME not set)
+    FULLNAME            - full name of operator (fallback if DEBFULLNAME not set)
     DEBEMAIL            - email address of operator e.g. "joe@blogs.com"
-    EMAIL               - email address of operator (if DEBEMAIL not set)
+    EMAIL               - email address of operator (fallback if DEBEMAIL not set)
     EXTRA_TEXT          - additional changelog points to include in new entry
                           if not set; then by default it will read from
-                          '\$FAB_PATH/common/changes'
-    FAB_PATH            - if not set, will fallback to '/turnkey/fab/'
+                          \$FAB_PATH/common/changes
     DEVDEBUG            - turn on debugging
 
 Future plans:
 
     - create new changelog (probably via switch?)
-    - support specifiying a path (currently must be run in root of appliance
-      source code)
     - do something better with the EXTRA_TEXT (e.g. include in common?)
     - support alternate text editors?
 
@@ -88,8 +83,16 @@ EOF
 which dch > /dev/null || fatal "dch not found; please install 'devscripts'"
 which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
 
-if [[ -z "$FAB_PATH" ]]; then
-    FAB_PATH=/turnkey/fab
+APP=$(basename "$PWD")
+APP_CHANGELOGS=$(tkldev-makefile-info "$PWD/Makefile" -i \
+    | grep -E "^${FAB_PATH}/common/" \
+    | sed -En "s|^([a-z0-9/-]+)/mk/turnkey/*([a-z0-9-]+).mk|\1/changes/\2.changelog|p")
+
+if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
+    EXTRA_TEXT=$( \
+        tkldev-changelog-extractor "$PWD/changelog" \
+        "${FAB_PATH}/common/changes/turnkey.changelog" "$APP_CHANGELOGS" \
+    )
 fi
 
 EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
@@ -135,7 +138,7 @@ EOF
     fi
 fi
 
-unset set_author set_date new_min_set new_maj_set new edit app_name
+unset set_author set_date new_min_set new_maj_set new edit changelog_path
 if [[ $# -eq 0 ]]; then
     # if no args; then default to '-n|--new-minor'
     new_min_set=1
@@ -173,55 +176,36 @@ while [[ $# -gt 0 ]]; do
             fatal "Unknown argument $1"
             ;;
         *)
-            if [[ -z "$app_name" ]]; then
-                app_name=$1
+            if [[ -z "$changelog_path" ]]; then
+                changelog_path=$1
             else
-                fatal "Only one app name can be given - got: $app_name & '$1'"
+                fatal "Only one changelog path can be given" \
+                    " (got: '$changelog_path' & '$1'"
             fi
             ;;
     esac
     shift
 done
 
-if [[ -z "$app_name" ]]; then
-    changelog="$PWD/changelog"
-    [[ -f "$changelog" ]] || fatal "Could not find changelog in local dir."
-    app_path="$PWD"
-    app_name=$(basename "$PWD")
-elif [[ -f "$FAB_PATH/$app_name/changelog" ]]; then
-    app_path="$FAB_PATH/$app_name"
-    changelog="$FAB_PATH/$app_name/changelog"
+if [[ -f "$changelog_path" ]]; then
+    # nothing to do; $changelog_path is file path
+    :
+elif [[ -z "$changelog_path" ]] && [[ -f "$PWD/changelog" ]]; then
+    changelog_path="$PWD/changelog"
+elif [[ -d "$changelog_path" ]] && [[ -f "$changelog_path/changelog" ]]; then
+    changelog_path="$changelog_path/changelog"
 else
-    fatal "Could not find changelog for $app_name"
+    fatal "Could not find changelog; searched $PWD/changelog," \
+        " $changelog_path and $changelog_path/changelog"
 fi
 
-if [[ -f "$app_path/Makefile" ]]; then
-    makefile="$app_path/Makefile"
-else
-    fatal "Could not find make file: $app_path/Makefile"
-fi
-
-_changes="$FAB_PATH/common/changes"
-readarray -t common_changes <<< "$(tkldev-makefile-info "$makefile" -c \
-    | sed -En "\|/common/|s|.*/turnkey/([a-z]+)\.mk|$_changes/\1.changelog|p" \
-    | sort \
-)"
-
-if [[ -z "$EXTRA_TEXT" ]]; then
-    EXTRA_TEXT=$( \
-        tkldev-changelog-extractor "$app_path/changelog" \
-        "${FAB_PATH}/common/changes/turnkey.changelog" \
-        "${common_changes[@]}" \
-    )
-fi
-
-OLD_VER=$(head -1 changelog | cut -d" " -f1 | sed "s|^.*${APP}-||")
+OLD_VER=$(head -1 changelog | cut -d' ' -f1 | sed "s|^.*${APP}-||")
 MAJ="$(echo "${OLD_VER}" | cut -d. -f1)"
 MIN="$(echo "${OLD_VER}" | cut -d. -f2)"
 
 if [[ -n "$new_min_set" ]] && [[ -n "$new_maj_set" ]]; then
     usage "-n|--new-minor & -N|--new-major can't both be set; doesn't make sense."
-elif [[ "$new" == "minor" ]]; then
+elif [[ "$new" == 'minor' ]]; then
     MIN="$(( $(echo "${OLD_VER}" | cut -d. -f2) +1 ))"
 elif [[ "$new" == "major" ]]; then
     MAJ=$(( MAJ +1 ))
@@ -234,15 +218,19 @@ NAME="turnkey-${APP}-${NEW_VER}"
 OLD_FILE="$(cat changelog)"
 
 if [[ -n "$set_date" ]]; then
-    dch --changelog changelog --release --force-distribution turnkey --urgency low
+    dch --changelog "$changelog_path" --release \
+        --force-distribution turnkey --urgency low
 fi
 if [[ -n "$set_author" ]]; then
     sed -i "0,\|^ -- |s|^.*> \(.*\)| -- $author_name <$author_email> \1|" changelog
 fi
 if [[ "$edit" == "y" ]]; then
     if [[ -n "$new" ]]; then
-        dch --changelog changelog --release-heuristic log \
-            --package "$NAME" --newversion 1 --force-distribution turnkey \
+        dch --changelog changelog \
+            --release-heuristic log \
+            --package "$NAME" \
+            --newversion 1 \
+            --force-distribution turnkey \
             --urgency low
         sed -i "3s|\*.*|\* |" changelog
         sed -e "4r ${EXTRA_TEXT_FILE}" -i changelog
