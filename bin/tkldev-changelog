@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# Copyright (c) 2017 TurnKey GNU/Linux - http://www.turnkeylinux.org
+# Copyright (c) 2017-2026 TurnKey GNU/Linux - https://www.turnkeylinux.org
 # 
 # tkldev-changelog
 # ----------------
@@ -12,21 +12,30 @@
 # Free Software Foundation; either version 3 of the License, or (at your
 # option) any later version.
 
-fatal() { echo "FATAL [$(basename $0)]: $@" 1>&2; exit 1; }
-warning() { echo "WARNING [$(basename $0)]: $@"; }
-info() { echo "INFO [$(basename $0)]: $@"; }
+fatal() { echo "FATAL [$(basename "$0")]: $*" 1>&2; exit 1; }
+warning() { echo "WARNING [$(basename "$0")]: $*"; }
+info() { echo "INFO [$(basename "$0")]: $*"; }
 
 usage() {
+    local exit_code=0
     if [[ $# -ne 0 ]]; then
-        echo "ERROR: $@"
+        echo "ERROR: $*"
         echo
         exit_code=1
     fi
 cat<<EOF
-Syntax: $(basename $0) [appliance-name]
+Syntax: $(basename "$0") [appliance-name]
+
+A tool to edit/update an appliance changelog.
+
 When run in the root directory of an appliance's source code, this script will
 create a new changelog entry at the top of an existing changelog file & opens
 the file for editing in vim.
+
+This tool will also check the Makefile for included common makefiles and if
+any of those have an appropriately versioned common changelog entry (see
+common/changes/) those entries will also be automatically included in the new
+changelog entry.
 
 Prerequisites:
 
@@ -36,7 +45,9 @@ Prerequisites:
 
 Arguments::
 
-    appliance-name      - e.g., core
+    appliance-name      - e.g., core ('\$FAB_PATH/products/core')
+                          Optional - will default to current directory if not
+                          set.
     -a|--author         - Update the author name and email address of the most
                           recent entry (do not leave open for editing).
     -d|--date           - Update the date of the most recent entry (do not
@@ -57,8 +68,9 @@ Environment::
     DEBEMAIL            - email address of operator e.g. "joe@blogs.com"
     EMAIL               - email address of operator (if DEBEMAIL not set)
     EXTRA_TEXT          - additional changelog points to include in new entry
-                          if not set; then by default it will read from 
-                          "/turnkey/fab/common/changes"
+                          if not set; then by default it will read from
+                          '\$FAB_PATH/common/changes'
+    FAB_PATH            - if not set, will fallback to '/turnkey/fab/'
     DEVDEBUG            - turn on debugging
 
 Future plans:
@@ -70,26 +82,30 @@ Future plans:
     - support alternate text editors?
 
 EOF
-    exit $exit_code
+    exit "$exit_code"
 }
 
 [[ -z "$DEVDEBUG" ]] || set -x
 which dch > /dev/null || fatal "dch not found; please install 'devscripts'"
 which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
-[ -f changelog ] || fatal "no changelog in local dir"
 
-APP=$(basename $PWD)
-COMMON_CHANGES="${FAB_PATH}/common/changes"
+APP=$(basename "$PWD")
+FAB_PATH="${FAB_PATH:-/turnkey/fab}"
+COMMON="${FAB_PATH}/common"
 APP_CHANGELOGS=$(tkldev-makefile-info "$PWD/Makefile" -i \
-    | grep -E "^${FAB_PATH}/common/" \
+    | grep -E "^${COMMON}/" \
     | sed -En "s|^([a-z0-9/-]+)/mk/turnkey/*([a-z0-9-]+).mk|\1/changes/\2.changelog|p")
 
 if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
-    EXTRA_TEXT=$(tkldev-changelog-extractor "$PWD/changelog" "${FAB_PATH}/common/changes/turnkey.changelog" $APP_CHANGELOGS)
+    EXTRA_TEXT=$( \
+        tkldev-changelog-extractor \
+        "$PWD/changelog" "${COMMON}/changes/turnkey.changelog" \
+        "$APP_CHANGELOGS" \
+    )
 fi
 
 EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
-trap "rm -f $EXTRA_TEXT_FILE" EXIT
+trap 'rm -f $EXTRA_TEXT_FILE' EXIT
 echo "$EXTRA_TEXT" > "$EXTRA_TEXT_FILE"
 
 author_name=${DEBFULLNAME:-$FULLNAME}
@@ -97,29 +113,31 @@ author_email=${DEBEMAIL:-$EMAIL}
 if [[ -z "$author_name" ]] || [[ -z "$author_email" ]]; then
     unset changed
     if [[ -f "$HOME/.bashrc.d/tkldev-author" ]]; then
-        source $HOME/.bashrc.d/tkldev-author
+        # shellcheck source=/dev/null
+        source "$HOME/.bashrc.d/tkldev-author"
     fi
     if [[ -z "$author_name" ]] && [[ -z "$DEBFULLNAME" ]]; then
         warning "DEBFULLNAME (or FULLNAME) not set in env"
-        read -p "Enter fullname: " author_name
+        read -pr "Enter fullname: " author_name
         changed=true
     fi
     if [[ -z "$author_email" ]] && [[ -z "$DEBEMAIL" ]]; then
         warning "DEBEMAIL (or EMAIL) not set in env"
-        read -p "Enter email: " author_email
+        read -pr "Enter email: " author_email
         changed=true
     fi
-    if [[ "$changed" == 'true' ]]; then
-        read -p "Set permanently? (will save to $HOME/.bashrc.d/tkldev-author) [y]/n: " save
+    if [[ "$changed" == "true" ]]; then
+        read -pr "Set permanently? (will save to $HOME/.bashrc.d/tkldev-author) [y]/n: " save
         case $save in
             [yY]|yes|YES|"")
-                cat > $HOME/.bashrc.d/tkldev-author <<EOF
+                cat > "$HOME/.bashrc.d/tkldev-author" <<EOF
 # This file was generated by tkldev-changelog
 export DEBFULLNAME="$author_name"
 export DEBEMAIL="$author_email"
 EOF
-                chmod +x $HOME/.bashrc.d/tkldev-author
-                source $HOME/.bashrc.d/tkldev-author
+                chmod +x "$HOME/.bashrc.d/tkldev-author"
+                # shellcheck source=/dev/null
+                source "$HOME/.bashrc.d/tkldev-author"
                 ;;
             *)
                 export DEBFULLNAME="$author_name"
@@ -129,7 +147,7 @@ EOF
     fi
 fi
 
-unset set_author set_date new_min_set new_maj_set new edit
+unset set_author set_date new_min_set new_maj_set new edit app_name
 if [[ $# -eq 0 ]]; then
     # if no args; then default to '-n|--new-minor'
     new_min_set=1
@@ -143,39 +161,85 @@ while [[ $# -gt 0 ]]; do
         -a|--author)
             set_author=y
             edit=n
-            shift;;
+            ;;
         -d|--date)
             set_date=y
             edit=n
-            shift;;
+            ;;
         -e|--edit)
             set_author=y
             set_date=y
             edit=y
-            shift;;
+            ;;
         -n|--new-minor)
             new_min_set=1
             new=minor
             edit=y
-            shift;;
+            ;;
         -N|--new-major)
             new_maj_set=1
             new=major
             edit=y
-            shift;;
+            ;;
+        -*)
+            fatal "Unknown argument $1"
+            ;;
+        *)
+            if [[ -z "$app_name" ]]; then
+                app_name=$1
+            else
+                fatal "Only one app name can be given - got: $app_name & '$1'"
+            fi
+            ;;
     esac
+    shift
 done
 
-OLD_VER=$(head -1 changelog | cut -d' ' -f1 | sed "s|^.*${APP}-||")
-MAJ="$(echo ${OLD_VER} | cut -d. -f1)"
-MIN="$(echo ${OLD_VER} | cut -d. -f2)"
+if [[ -z "$app_name" ]]; then
+    changelog="$PWD/changelog"
+    [[ -f "$changelog" ]] || fatal "Could not find changelog in local dir."
+    app_path="$PWD"
+    app_name=$(basename "$PWD")
+elif [[ -f "$FAB_PATH/$app_name/changelog" ]]; then
+    app_path="$FAB_PATH/$app_name"
+    changelog="$FAB_PATH/$app_name/changelog"
+else
+    fatal "Could not find changelog for $app_name"
+fi
+
+if [[ -f "$app_path/Makefile" ]]; then
+    makefile="$app_path/Makefile"
+else
+    fatal "Could not find make file: $app_path/Makefile"
+fi
+
+_changes="$FAB_PATH/common/changes"
+readarray -t common_changes <<< "$(tkldev-makefile-info "$makefile" -i \
+    | sed -En "\|/common/|s|.*/turnkey/([a-z0-9-]+)\.mk|$_changes/\1.changelog|p" \
+    | sort \
+)"
+if [[ ${#common_changes[@]} -eq 1 ]] && [[ -z "${common_changes[0]}" ]]; then
+    common_changes=()
+fi
+
+if [[ -z "$EXTRA_TEXT" ]]; then
+    EXTRA_TEXT=$( \
+        tkldev-changelog-extractor "$app_path/changelog" \
+        "${FAB_PATH}/common/changes/turnkey.changelog" \
+        "${common_changes[@]}" \
+    )
+fi
+
+OLD_VER=$(head -1 changelog | cut -d" " -f1 | sed "s|^.*${APP}-||")
+MAJ="$(echo "${OLD_VER}" | cut -d. -f1)"
+MIN="$(echo "${OLD_VER}" | cut -d. -f2)"
 
 if [[ -n "$new_min_set" ]] && [[ -n "$new_maj_set" ]]; then
     usage "-n|--new-minor & -N|--new-major can't both be set; doesn't make sense."
-elif [[ "$new" == 'minor' ]]; then
-    MIN="$(( $(echo ${OLD_VER} | cut -d. -f2) +1 ))"
-elif [[ "$new" == 'major' ]]; then
-    MAJ=$(( $MAJ +1 ))
+elif [[ "$new" == "minor" ]]; then
+    MIN="$(( $(echo "${OLD_VER}" | cut -d. -f2) +1 ))"
+elif [[ "$new" == "major" ]]; then
+    MAJ=$(( MAJ +1 ))
     MIN=0
 fi
 
@@ -190,9 +254,11 @@ fi
 if [[ -n "$set_author" ]]; then
     sed -i "0,\|^ -- |s|^.*> \(.*\)| -- $author_name <$author_email> \1|" changelog
 fi
-if [[ "$edit" == 'y' ]]; then
+if [[ "$edit" == "y" ]]; then
     if [[ -n "$new" ]]; then
-        dch --changelog changelog --release-heuristic log --package $NAME --newversion 1 --force-distribution turnkey --urgency low
+        dch --changelog changelog --release-heuristic log \
+            --package "$NAME" --newversion 1 --force-distribution turnkey \
+            --urgency low
         sed -i "3s|\*.*|\* |" changelog
         sed -e "4r ${EXTRA_TEXT_FILE}" -i changelog
     else

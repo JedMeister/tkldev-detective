@@ -276,7 +276,7 @@ def parse_makefile(  # noqa: C901, PLR0912
                 parse_makefile(
                     line.split(" ", 1)[1]
                     .strip()
-                    .replace("$(FAB_PATH)", os.environ["FAB_PATH"])
+                    .replace("$(FAB_PATH)", MAKEFILE_ENV["FAB_PATH"])
                     .replace("$(FAB_SHARE_PATH)", "/usr/share/fab"),
                     makefile_data,
                 )

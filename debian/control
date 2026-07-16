@@ -15,6 +15,11 @@ Depends:
     shellcheck,
     pylint,
     devscripts,
+    apt-file,
 Recommends:
-    python3-yaml
-Description: linter for turnkeylinux appliances
+    python3-yaml,
+    vim | neovim | vim-tiny,
+Description: Linter for turnkeylinux appliances
+ A purpose built linter for TurnKey Linux appliance build code.
+ .
+ Also includes a number of dev helper scripts.
