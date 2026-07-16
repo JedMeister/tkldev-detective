@@ -202,8 +202,8 @@ else
 fi
 
 _changes="$FAB_PATH/common/changes"
-readarray -t common_changes <<< "$(tkldev-makefile-info "$makefile" -c \
-    | sed -En "\|/common/|s|.*/turnkey/([a-z]+)\.mk|$_changes/\1.changelog|p" \
+readarray -t common_changes <<< "$(tkldev-makefile-info "$makefile" \
+    | sed -En "\|/common/|s|.*/turnkey/([a-z0-9-]+)\.mk|$_changes/\1.changelog|p" \
     | sort \
 )"
 
