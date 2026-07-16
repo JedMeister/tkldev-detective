@@ -214,10 +214,13 @@ else
 fi
 
 _changes="$FAB_PATH/common/changes"
-readarray -t common_changes <<< "$(tkldev-makefile-info "$makefile" \
+readarray -t common_changes <<< "$(tkldev-makefile-info "$makefile" -i \
     | sed -En "\|/common/|s|.*/turnkey/([a-z0-9-]+)\.mk|$_changes/\1.changelog|p" \
     | sort \
 )"
+if [[ ${#common_changes[@]} -eq 1 ]] && [[ -z "${common_changes[0]}" ]]; then
+    common_changes=()
+fi
 
 if [[ -z "$EXTRA_TEXT" ]]; then
     EXTRA_TEXT=$( \
