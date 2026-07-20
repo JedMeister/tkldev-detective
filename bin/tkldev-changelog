@@ -91,22 +91,6 @@ which vim > /dev/null || fatal "vim not found; call yourself a developer?!?"
 
 APP=$(basename "$PWD")
 FAB_PATH="${FAB_PATH:-/turnkey/fab}"
-COMMON="${FAB_PATH}/common"
-APP_CHANGELOGS=$(tkldev-makefile-info "$PWD/Makefile" -i \
-    | grep -E "^${COMMON}/" \
-    | sed -En "s|^([a-z0-9/-]+)/mk/turnkey/*([a-z0-9-]+).mk|\1/changes/\2.changelog|p")
-
-if [ -z "$EXTRA_TEXT" ] && [ "$APP" != "core" ]; then
-    EXTRA_TEXT=$( \
-        tkldev-changelog-extractor \
-        "$PWD/changelog" "${COMMON}/changes/turnkey.changelog" \
-        "$APP_CHANGELOGS" \
-    )
-fi
-
-EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
-trap 'rm -f $EXTRA_TEXT_FILE' EXIT
-echo "$EXTRA_TEXT" > "$EXTRA_TEXT_FILE"
 
 author_name=${DEBFULLNAME:-$FULLNAME}
 author_email=${DEBEMAIL:-$EMAIL}
@@ -222,12 +206,22 @@ if [[ ${#common_changes[@]} -eq 1 ]] && [[ -z "${common_changes[0]}" ]]; then
     common_changes=()
 fi
 
-if [[ -z "$EXTRA_TEXT" ]]; then
+if [[ -z "$EXTRA_TEXT" ]] && [[ "$app_name" != "core" ]]; then
     EXTRA_TEXT=$( \
         tkldev-changelog-extractor "$app_path/changelog" \
         "${FAB_PATH}/common/changes/turnkey.changelog" \
         "${common_changes[@]}" \
     )
+fi
+
+EXTRA_TEXT_FILE="$(mktemp /tmp/tkldev-changelog.XXXXXX)"
+trap 'rm -f $EXTRA_TEXT_FILE' EXIT
+if [[ -n "$EXTRA_TEXT" ]]; then
+    # trailing blank line keeps a gap between the last inserted entry & the
+    # ' -- ' sign off line ($() strips the trailing newlines echo would keep)
+    printf '%s\n\n' "$EXTRA_TEXT" > "$EXTRA_TEXT_FILE"
+else
+    : > "$EXTRA_TEXT_FILE"
 fi
 
 OLD_VER=$(head -1 changelog | cut -d" " -f1 | sed "s|^.*${APP}-||")
